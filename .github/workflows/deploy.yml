@@ -1,23 +1,48 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages with API Key
 
 on:
   push:
-    branches: ["main"] 
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Cambiado a write para permitir la inyección de la llave
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # --- ESTE ES EL PASO NUEVO QUE INYECTA TU LLAVE ---
       - name: Inject API Key
         run: |
-          # Este comando busca la palabra REPLACE_ME_WITH_GEMINI_KEY y la cambia por el secreto
-          sed -i "s/REPLACE_ME_WITH_GEMINI_KEY/${{ secrets.GEMINI_API_KEY }}/g" script.js
+          sed -i "s|REPLACE_ME_WITH_GEMINI_KEY|${{ secrets.GEMINI_API_KEY }}|g" script.js
+          echo "Inyección de clave completada."
 
-      - name: Deploy to GH Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Subimos los archivos directamente (sin Jekyll para evitar errores de compilación)
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./ # O la carpeta donde esté tu index.html
+          path: ./
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
