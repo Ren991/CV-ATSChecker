@@ -73,7 +73,7 @@ async function extractText(file) {
 }
 
 async function analyzeWithAI(cvText) {
-    const promptText = `Eres un reclutador experto IT. Analiza este CV y devuelve un JSON.
+    const promptText = `Eres un reclutador experto IT. Analiza este CV, incluyendo si pasaría todos los filtros ATS y devuelve un JSON.
     JSON format: { "score": 0-100, "category": "ELITE/SÓLIDO/MEJORABLE/CRÍTICO", "categoryDesc": "string", "feedback": ["string"] }
     CV TEXT: ${cvText}`;
 
