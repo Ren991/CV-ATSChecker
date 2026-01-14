@@ -40,5 +40,3 @@ Si deseas clonar este proyecto, recuerda configurar tus secretos:
 2. El flujo de **CI/CD** inyectará automáticamente la llave en el archivo `script.js` durante el despliegue, manteniéndola oculta en el código fuente público.
 
 ---
-
-Desarrollado con ❤️ para procesos de selección de alto nivel.
