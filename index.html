@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI ATS Resume Checker | Premium Review</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>ATS CV MasterCheck</h1>
+            <p>Optimiza tu currículum para los algoritmos de reclutamiento modernos.</p>
+        </header>
+
+        <div class="upload-area" id="dropZone">
+            <span class="upload-icon">📄</span>
+            <h3 id="fileNameDisplay">Arrastra tu CV aquí o haz clic para subir</h3>
+            <p class="upload-hint">Soporta formato PDF (Max 5MB)</p>
+            <input type="file" id="fileInput" accept=".pdf">
+        </div>
+
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px;">Analizando estructura y palabras clave...</p>
+        </div>
+
+        <div id="results">
+            <div class="score-container">
+                <div class="gauge-wrapper">
+                    <canvas id="scoreCanvas" width="120" height="120"></canvas>
+                    <div class="gauge-text" id="scoreValue">0%</div>
+                </div>
+                <div class="score-info">
+                    <div id="categoryBadge" class="category-badge">Calculando...</div>
+                    <h2 id="categoryTitle">Análisis Completado</h2>
+                    <p id="categoryDesc" class="text-dim"></p>
+                </div>
+            </div>
+
+            <h3 class="feedback-title">Puntos de mejora detectados:</h3>
+            <ul class="feedback-list" id="feedbackList">
+                </ul>
+
+            <button class="btn-retry" onclick="location.reload()">Subir otro CV</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
