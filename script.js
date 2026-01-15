@@ -44,8 +44,7 @@ async function handleFile(file) {
         await analyzeWithAI(text);
     } catch (error) {
         console.error("Error:", error);
-        alert('Error en el proceso: ' + error.message);
-        location.reload();
+        
     }
 }
 
