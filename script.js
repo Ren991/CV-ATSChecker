@@ -31,7 +31,7 @@ fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
 
 async function handleFile(file) {
     if (!file || file.type !== 'application/pdf') {
-        alert('Por favor, sube un archivo PDF válido.');
+        //alert('Por favor, sube un archivo PDF válido.');
         return;
     }
 
