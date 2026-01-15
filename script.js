@@ -1,11 +1,8 @@
 // Configuración de PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-// --- CONFIGURACIÓN BASADA EN TU LISTA ---
-const GEMINI_API_KEY = "REPLACE_ME_WITH_GEMINI_KEY"; 
-// Usamos el modelo gemini-3-flash-preview de tu lista
-const MODEL_NAME = "gemini-3-flash-preview";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+// --- API ENDPOINT DE VERCEL (Seguro, sin API key expuesta) ---
+const ANALYZE_API = "/api/analyzeCV";
 
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
@@ -73,28 +70,18 @@ async function extractText(file) {
 }
 
 async function analyzeWithAI(cvText) {
-    const promptText = `Eres un reclutador experto IT. Analiza este CV, incluyendo si pasaría todos los filtros ATS y devuelve un JSON.
-    JSON format: { "score": 0-100, "category": "ELITE/SÓLIDO/MEJORABLE/CRÍTICO", "categoryDesc": "string", "feedback": ["string"] }
-    CV TEXT: ${cvText}`;
-
     try {
-        const response = await fetch(GEMINI_URL, {
+        const response = await fetch(ANALYZE_API, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: promptText }] }],
-                generationConfig: {
-                    response_mime_type: "application/json"
-                }
-            })
+            body: JSON.stringify({ cvText: cvText })
         });
 
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`API error: ${response.statusText}`);
+        }
 
-        if (data.error) throw new Error(data.error.message);
-
-        // Con Gemini 3 Flash y response_mime_type, el JSON viene directo
-        const aiResult = JSON.parse(data.candidates[0].content.parts[0].text);
+        const aiResult = await response.json();
         displayResults(aiResult);
 
     } catch (error) {
