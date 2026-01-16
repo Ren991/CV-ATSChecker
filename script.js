@@ -1,142 +1,230 @@
-// Configuración de PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+// ===============================
+// CONFIG
+// ===============================
+const API_ENDPOINT = "/api/analyzeCV";
 
-// --- API ENDPOINT DE VERCEL (Seguro, sin API key expuesta) ---
-const ANALYZE_API = "/api/analyzeCV";
+// ===============================
+// ELEMENTOS DOM
+// ===============================
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+const fileNameDisplay = document.getElementById("fileNameDisplay");
+const loader = document.getElementById("loader");
+const results = document.getElementById("results");
+const feedbackList = document.getElementById("feedbackList");
 
-const fileInput = document.getElementById('fileInput');
-const dropZone = document.getElementById('dropZone');
-const loader = document.getElementById('loader');
-const results = document.getElementById('results');
-const scoreValueText = document.getElementById('scoreValue');
-const feedbackList = document.getElementById('feedbackList');
+// ===============================
+// EVENTOS UPLOAD
+// ===============================
+dropZone.addEventListener("click", () => fileInput.click());
 
-// Eventos de carga
-dropZone.addEventListener('click', () => fileInput.click());
-
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("drag-over");
 });
 
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    handleFile(e.dataTransfer.files[0]);
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("drag-over");
 });
 
-fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
 
-async function handleFile(file) {
-    if (!file || file.type !== 'application/pdf') {
-        //alert('Por favor, sube un archivo PDF válido.');
-        return;
-    }
+fileInput.addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
 
-    document.getElementById('fileNameDisplay').innerText = `Analizando: ${file.name}`;
-    dropZone.style.display = 'none';
-    loader.style.display = 'block';
-
-    try {
-        const text = await extractText(file);
-        await analyzeWithAI(text);
-    } catch (error) {
-        console.error("Error:", error);
-        
-    }
-}
-
-async function extractText(file) {
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-        reader.onload = async function() {
-            try {
-                const typedarray = new Uint8Array(this.result);
-                const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                let fullText = '';
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const content = await page.getTextContent();
-                    fullText += content.items.map(item => item.str).join(' ');
-                }
-                resolve(fullText);
-            } catch (e) { reject(e); }
-        };
-        reader.readAsArrayBuffer(file);
+// ===============================
+// MANEJO DE ARCHIVO
+// ===============================
+function handleFile(file) {
+  if (file.type !== "application/pdf") {
+    Swal.fire({
+      icon: "error",
+      title: "Formato inválido",
+      text: "Solo se permiten archivos PDF",
     });
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    Swal.fire({
+      icon: "error",
+      title: "Archivo muy grande",
+      text: "El archivo no puede superar los 5MB",
+    });
+    return;
+  }
+
+  fileNameDisplay.innerText = file.name;
+  extractTextFromPDF(file);
 }
 
-async function analyzeWithAI(cvText) {
+// ===============================
+// PDF → TEXTO
+// ===============================
+async function extractTextFromPDF(file) {
+  Swal.fire({
+    title: "Leyendo CV",
+    text: "Extrayendo texto del PDF...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  const reader = new FileReader();
+
+  reader.onload = async function () {
     try {
-        const response = await fetch(ANALYZE_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cvText: cvText })
-        });
+      const typedArray = new Uint8Array(this.result);
+      const pdf = await pdfjsLib.getDocument(typedArray).promise;
 
-        if (!response.ok) {
-            throw new Error(`API error: ${response.statusText}`);
-        }
+      let fullText = "";
 
-        const aiResult = await response.json();
-        displayResults(aiResult);
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const strings = content.items.map(item => item.str);
+        fullText += strings.join(" ") + "\n";
+      }
 
-    } catch (error) {
-        console.error("Error IA:", error);
-        throw new Error("La IA no pudo procesar el CV. Verifica el contenido.");
+      Swal.close();
+      analyzeCV(fullText);
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudo leer el PDF",
+      });
     }
+  };
+
+  reader.readAsArrayBuffer(file);
 }
 
-function displayResults(data) {
-    loader.style.display = 'none';
-    results.style.display = 'block';
+// ===============================
+// ENVÍO AL BACKEND
+// ===============================
+async function analyzeCV(cvText) {
+  Swal.fire({
+    title: "Analizando CV",
+    text: "Evaluando estructura y keywords ATS...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
 
-    const badge = document.getElementById('categoryBadge');
-    badge.innerText = data.category;
-    badge.style.background = getCategoryColor(data.category);
-    
-    document.getElementById('categoryTitle').innerText = "Análisis IA Completado";
-    document.getElementById('categoryDesc').innerText = data.categoryDesc;
+  try {
+    const res = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cvText }),
+    });
 
-    animateGauge(data.score);
+    if (!res.ok) throw new Error("Error al analizar el CV");
 
-    feedbackList.innerHTML = data.feedback
-        .map(f => `<li class="feedback-item">🤖 ${f}</li>`).join('');
+    const data = await res.json();
+
+    Swal.close();
+    renderResults(data);
+  } catch (err) {
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: err.message || "Falló el análisis del CV",
+    });
+  }
 }
 
-function getCategoryColor(cat) {
-    const colors = { 'ELITE': '#10b981', 'SÓLIDO': '#22d3ee', 'MEJORABLE': '#f59e0b', 'CRÍTICO': '#ef4444' };
-    return colors[cat] || '#6366f1';
+// ===============================
+// RENDER RESULTADOS
+// ===============================
+function renderResults(data) {
+  results.style.display = "block";
+
+  renderGauge(data.score);
+  renderCategory(data);
+  renderFeedback(data.feedback);
 }
 
-function animateGauge(target) {
-    const canvas = document.getElementById('scoreCanvas');
-    const ctx = canvas.getContext('2d');
-    let current = 0;
+// ===============================
+// GAUGE SCORE
+// ===============================
+function renderGauge(score) {
+  const canvas = document.getElementById("scoreCanvas");
+  const ctx = canvas.getContext("2d");
+  const valueText = document.getElementById("scoreValue");
 
-    function draw() {
-        ctx.clearRect(0, 0, 120, 120);
-        ctx.beginPath();
-        ctx.arc(60, 60, 54, 0, 2 * Math.PI);
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-        ctx.lineWidth = 10;
-        ctx.stroke();
+  const radius = canvas.width / 2 - 10;
+  const center = canvas.width / 2;
 
-        ctx.beginPath();
-        ctx.arc(60, 60, 54, 0, (current / 100) * 2 * Math.PI);
-        ctx.strokeStyle = current > 75 ? '#10b981' : (current > 45 ? '#22d3ee' : '#ef4444');
-        ctx.lineWidth = 10;
-        ctx.lineCap = 'round';
-        ctx.stroke();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        scoreValueText.innerText = `${Math.round(current)}%`;
+  // Fondo
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = 10;
+  ctx.arc(center, center, radius, 0, Math.PI * 2);
+  ctx.stroke();
 
-        if (current < target) {
-            current += 1;
-            requestAnimationFrame(draw);
-        }
-    }
-    draw();
+  // Color según score
+  const color =
+    score >= 80
+      ? "#10b981"
+      : score >= 60
+      ? "#6366f1"
+      : score >= 40
+      ? "#f59e0b"
+      : "#ef4444";
+
+  // Progreso
+  const endAngle = (Math.PI * 2 * score) / 100;
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 10;
+  ctx.arc(center, center, radius, 0, endAngle);
+  ctx.stroke();
+
+  valueText.innerText = `${score}%`;
+  valueText.style.color = color;
+}
+
+// ===============================
+// CATEGORÍA
+// ===============================
+function renderCategory(data) {
+  const badge = document.getElementById("categoryBadge");
+  const title = document.getElementById("categoryTitle");
+  const desc = document.getElementById("categoryDesc");
+
+  badge.innerText = data.category;
+  title.innerText = data.category;
+  desc.innerText = data.categoryDesc;
+
+  badge.style.background =
+    data.category === "ELITE"
+      ? "var(--success)"
+      : data.category === "SÓLIDO"
+      ? "var(--primary)"
+      : data.category === "MEJORABLE"
+      ? "var(--warning)"
+      : "var(--danger)";
+}
+
+// ===============================
+// FEEDBACK
+// ===============================
+function renderFeedback(feedback) {
+  feedbackList.innerHTML = "";
+
+  feedback.forEach(text => {
+    const li = document.createElement("li");
+    li.className = "feedback-item";
+    li.innerText = text;
+    feedbackList.appendChild(li);
+  });
 }
