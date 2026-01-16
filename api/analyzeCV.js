@@ -111,7 +111,9 @@ ${cvText}
       throw new Error("Score inválido");
     }
 
-    aiResult.category = normalizeCategory(aiResult.score);
+    aiResult.score = aiResult.score * 10;
+
+    aiResult.category = normalizeCategory(aiResult.score / 10);
 
     aiResult.summary =
       typeof aiResult.summary === "string"
