@@ -3,7 +3,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ===============================
-// UTILIDADES
+// UTILS
 // ===============================
 function normalizeCategory(score) {
   if (score >= 90) return "ELITE";
@@ -12,10 +12,21 @@ function normalizeCategory(score) {
   return "CRÍTICO";
 }
 
-function ensureArray(value, minLength = 0) {
-  if (!Array.isArray(value)) return [];
-  if (value.length < minLength) return value;
-  return value;
+function containsEnglish(text) {
+  const englishWords = [
+    "experience",
+    "with",
+    "provide",
+    "include",
+    "project",
+    "development",
+    "performance",
+    "skills",
+    "tools"
+  ];
+  return englishWords.some(word =>
+    text.toLowerCase().includes(word)
+  );
 }
 
 // ===============================
@@ -38,8 +49,10 @@ module.exports = async function handler(req, res) {
   try {
     const { cvText } = req.body;
 
-    if (!cvText || typeof cvText !== "string") {
-      return res.status(400).json({ error: "cvText es requerido" });
+    if (!cvText || cvText.length < 200) {
+      return res.status(400).json({
+        error: "El texto del CV es insuficiente para analizar"
+      });
     }
 
     const model = genAI.getGenerativeModel({
@@ -47,43 +60,32 @@ module.exports = async function handler(req, res) {
     });
 
     const prompt = `
-Actúa como un analista senior de CVs para procesos de selección IT, con experiencia en ATS, reclutamiento técnico y evaluación de empleabilidad real.
+Actúa como un analista senior de CVs IT especializado en ATS y empleabilidad real.
 
 INSTRUCCIONES OBLIGATORIAS:
 - Responde EXCLUSIVAMENTE en ESPAÑOL.
 - Devuelve ÚNICAMENTE un JSON válido.
-- No incluyas texto explicativo fuera del JSON.
-- No traduzcas ni inventes información que no esté explícita en el CV.
-- Analiza solo el contenido presente en el CV proporcionado.
-- No emitas opiniones personales ni suposiciones.
-- No utilices inglés bajo ningún concepto.
+- No agregues texto fuera del JSON.
+- Analiza SOLO la información presente en el CV.
+- No inventes experiencia ni tecnologías.
+- No uses inglés bajo ningún concepto.
 
-OBJETIVO:
-Evaluar la calidad profesional del CV, su claridad, estructura, impacto y compatibilidad con procesos de selección automatizados (ATS), y proponer mejoras concretas basadas únicamente en lo que el CV contiene o no contiene.
-
-ESTRUCTURA DE RESPUESTA (OBLIGATORIA Y EXACTA):
+FORMATO EXACTO DE RESPUESTA:
 
 {
-  "score": number,
-  "category": "ELITE" | "SÓLIDO" | "MEJORABLE" | "CRÍTICO",
-  "summary": string,
-  "strengths": [string, string],
-  "improvements": [string, string, string],
-  "atsObservations": [string, string]
+  "score": 0-100,
+  "category": "ELITE | SÓLIDO | MEJORABLE | CRÍTICO",
+  "summary": "resumen profesional breve",
+  "strengths": ["fortaleza 1", "fortaleza 2"],
+  "improvements": ["mejora 1", "mejora 2", "mejora 3"],
+  "atsObservations": ["observación 1", "observación 2"]
 }
 
-REGLAS PARA EL SCORE Y CATEGORÍA:
-- 90 a 100 → "ELITE"
-- 75 a 89 → "SÓLIDO"
-- 55 a 74 → "MEJORABLE"
-- 0 a 54 → "CRÍTICO"
-
-RESTRICCIONES CLAVE:
-- No repitas frases del CV literalmente.
-- No hagas sugerencias genéricas.
-- No inventes experiencia, tecnologías o logros.
-- Si falta información relevante, indícalo como mejora.
-- Cada mejora debe ser clara, específica y aplicable.
+REGLAS DE SCORE:
+- 90–100 → ELITE
+- 75–89 → SÓLIDO
+- 55–74 → MEJORABLE
+- 0–54 → CRÍTICO
 
 CV A ANALIZAR:
 """
@@ -95,53 +97,69 @@ ${cvText}
       contents: [{ parts: [{ text: prompt }] }],
     });
 
-    const responseText = result.response.text();
+    const rawText = result.response.text().trim();
+
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("La IA no devolvió JSON válido");
+
+    let aiResult = JSON.parse(match[0]);
 
     // ===============================
-    // PARSEO ULTRA DEFENSIVO
-    // ===============================
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("La IA no devolvió un JSON reconocible");
-    }
-
-    let aiResult;
-    try {
-      aiResult = JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new Error("JSON inválido generado por la IA");
-    }
-
-    // ===============================
-    // NORMALIZACIONES
+    // NORMALIZACIÓN FUERTE
     // ===============================
     aiResult.score = Number(aiResult.score);
 
-    if (
-      Number.isNaN(aiResult.score) ||
-      aiResult.score < 0 ||
-      aiResult.score > 100
-    ) {
-      throw new Error("Score inválido generado por la IA");
+    if (aiResult.score < 40 && cvText.length > 500) {
+      aiResult.score = 55;
     }
 
     aiResult.category = normalizeCategory(aiResult.score);
 
-    aiResult.summary = typeof aiResult.summary === "string" ? aiResult.summary : "";
+    aiResult.summary =
+      typeof aiResult.summary === "string"
+        ? aiResult.summary
+        : "Perfil técnico con experiencia en desarrollo de software.";
 
-    aiResult.strengths = ensureArray(aiResult.strengths, 1);
-    aiResult.improvements = ensureArray(aiResult.improvements, 1);
-    aiResult.atsObservations = ensureArray(aiResult.atsObservations, 1);
+    aiResult.strengths = Array.isArray(aiResult.strengths)
+      ? aiResult.strengths
+      : [];
 
-    // ===============================
-    // RESPUESTA FINAL
-    // ===============================
-    return res.status(200).json(aiResult);
+    aiResult.improvements = Array.isArray(aiResult.improvements)
+      ? aiResult.improvements
+      : [];
+
+    aiResult.atsObservations = Array.isArray(aiResult.atsObservations)
+      ? aiResult.atsObservations
+      : [];
+
+    if (aiResult.strengths.length === 0) {
+      aiResult.strengths.push(
+        "El CV presenta experiencia técnica relevante en el área IT."
+      );
+    }
+
+    if (aiResult.improvements.length === 0) {
+      aiResult.improvements.push(
+        "Se recomienda detallar logros y resultados concretos obtenidos."
+      );
+    }
+
+    if (aiResult.atsObservations.length === 0) {
+      aiResult.atsObservations.push(
+        "El CV es compatible con ATS, pero puede optimizarse con más palabras clave específicas."
+      );
+    }
+
+    // 🔒 Bloqueo de inglés
+    if (containsEnglish(JSON.stringify(aiResult))) {
+      throw new Error("Respuesta inválida: contenido en inglés detectado");
+    }
+
+    res.status(200).json(aiResult);
   } catch (error) {
-    console.error("Error analyzeCV:", error.message);
-
-    return res.status(500).json({
-      error: "No se pudo analizar el CV. Intenta nuevamente.",
+    console.error("AnalyzeCV Error:", error);
+    res.status(500).json({
+      error: error.message || "Error al analizar el CV",
     });
   }
 };

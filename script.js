@@ -2,21 +2,21 @@
 // CONFIG
 // ===============================
 const API_ENDPOINT = "/api/analyzeCV";
+
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
 
 // ===============================
-// ELEMENTOS DOM
+// DOM
 // ===============================
 const dropZone = document.getElementById("dropZone");
 const fileInput = document.getElementById("fileInput");
 const fileNameDisplay = document.getElementById("fileNameDisplay");
-const loader = document.getElementById("loader");
 const results = document.getElementById("results");
 const feedbackList = document.getElementById("feedbackList");
 
 // ===============================
-// EVENTOS UPLOAD
+// EVENTS
 // ===============================
 dropZone.addEventListener("click", () => fileInput.click());
 
@@ -42,24 +42,16 @@ fileInput.addEventListener("change", e => {
 });
 
 // ===============================
-// MANEJO DE ARCHIVO
+// FILE HANDLING
 // ===============================
 function handleFile(file) {
   if (file.type !== "application/pdf") {
-    Swal.fire({
-      icon: "error",
-      title: "Formato inválido",
-      text: "Solo se permiten archivos PDF",
-    });
+    Swal.fire("Error", "Solo se permiten archivos PDF", "error");
     return;
   }
 
   if (file.size > 5 * 1024 * 1024) {
-    Swal.fire({
-      icon: "error",
-      title: "Archivo muy grande",
-      text: "El archivo no puede superar los 5MB",
-    });
+    Swal.fire("Error", "El archivo supera los 5MB", "error");
     return;
   }
 
@@ -68,11 +60,11 @@ function handleFile(file) {
 }
 
 // ===============================
-// PDF → TEXTO
+// PDF → TEXT
 // ===============================
 async function extractTextFromPDF(file) {
   Swal.fire({
-    title: "Leyendo CV",
+    title: "Procesando CV",
     text: "Extrayendo texto del PDF...",
     allowOutsideClick: false,
     didOpen: () => Swal.showLoading(),
@@ -82,26 +74,22 @@ async function extractTextFromPDF(file) {
 
   reader.onload = async function () {
     try {
-      const typedArray = new Uint8Array(this.result);
-      const pdf = await pdfjsLib.getDocument(typedArray).promise;
+      const pdf = await pdfjsLib
+        .getDocument(new Uint8Array(this.result))
+        .promise;
 
-      let fullText = "";
+      let text = "";
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        const strings = content.items.map(item => item.str);
-        fullText += strings.join(" ") + "\n";
+        text += content.items.map(i => i.str).join(" ") + "\n";
       }
 
       Swal.close();
-      analyzeCV(fullText);
-    } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "No se pudo leer el PDF",
-      });
+      analyzeCV(text);
+    } catch {
+      Swal.fire("Error", "No se pudo leer el PDF", "error");
     }
   };
 
@@ -109,12 +97,12 @@ async function extractTextFromPDF(file) {
 }
 
 // ===============================
-// ENVÍO AL BACKEND
+// BACKEND CALL
 // ===============================
 async function analyzeCV(cvText) {
   Swal.fire({
     title: "Analizando CV",
-    text: "Evaluando estructura y keywords ATS...",
+    text: "Evaluando compatibilidad ATS...",
     allowOutsideClick: false,
     didOpen: () => Swal.showLoading(),
   });
@@ -133,100 +121,74 @@ async function analyzeCV(cvText) {
     Swal.close();
     renderResults(data);
   } catch (err) {
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: err.message || "Falló el análisis del CV",
-    });
+    Swal.fire("Error", err.message, "error");
   }
 }
 
 // ===============================
-// RENDER RESULTADOS
+// RENDER
 // ===============================
 function renderResults(data) {
   results.style.display = "block";
 
   renderGauge(data.score);
   renderCategory(data);
-  renderFeedback(data.feedback);
+  renderFeedback(data.improvements);
 }
 
 // ===============================
-// GAUGE SCORE
+// GAUGE
 // ===============================
 function renderGauge(score) {
   const canvas = document.getElementById("scoreCanvas");
   const ctx = canvas.getContext("2d");
-  const valueText = document.getElementById("scoreValue");
+  const value = document.getElementById("scoreValue");
 
-  const radius = canvas.width / 2 - 10;
-  const center = canvas.width / 2;
+  const r = canvas.width / 2 - 10;
+  const c = canvas.width / 2;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Fondo
   ctx.beginPath();
   ctx.strokeStyle = "rgba(255,255,255,0.1)";
   ctx.lineWidth = 10;
-  ctx.arc(center, center, radius, 0, Math.PI * 2);
+  ctx.arc(c, c, r, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Color según score
-  const color =
-    score >= 80
-      ? "#10b981"
-      : score >= 60
-      ? "#6366f1"
-      : score >= 40
-      ? "#f59e0b"
-      : "#ef4444";
-
-  // Progreso
-  const endAngle = (Math.PI * 2 * score) / 100;
+  const colors = score >= 80 ? "#10b981" : score >= 60 ? "#6366f1" : "#ef4444";
+  const end = (Math.PI * 2 * score) / 100;
 
   ctx.beginPath();
-  ctx.strokeStyle = color;
+  ctx.strokeStyle = colors;
   ctx.lineWidth = 10;
-  ctx.arc(center, center, radius, 0, endAngle);
+  ctx.arc(c, c, r, 0, end);
   ctx.stroke();
 
-  valueText.innerText = `${score}%`;
-  valueText.style.color = color;
+  value.innerText = `${score}%`;
+  value.style.color = colors;
 }
 
 // ===============================
-// CATEGORÍA
+// CATEGORY
 // ===============================
 function renderCategory(data) {
-  const badge = document.getElementById("categoryBadge");
-  const title = document.getElementById("categoryTitle");
-  const desc = document.getElementById("categoryDesc");
-
-  badge.innerText = data.category;
-  title.innerText = data.category;
-  desc.innerText = data.categoryDesc;
-
-  badge.style.background =
-    data.category === "ELITE"
-      ? "var(--success)"
-      : data.category === "SÓLIDO"
-      ? "var(--primary)"
-      : data.category === "MEJORABLE"
-      ? "var(--warning)"
-      : "var(--danger)";
+  document.getElementById("categoryBadge").innerText = data.category;
+  document.getElementById("categoryTitle").innerText = data.category;
+  document.getElementById("categoryDesc").innerText = data.summary;
 }
 
 // ===============================
 // FEEDBACK
 // ===============================
-function renderFeedback(feedback) {
+function renderFeedback(list) {
   feedbackList.innerHTML = "";
 
-  feedback.forEach(text => {
+  if (!Array.isArray(list)) return;
+
+  list.forEach(item => {
     const li = document.createElement("li");
     li.className = "feedback-item";
-    li.innerText = text;
+    li.innerText = item;
     feedbackList.appendChild(li);
   });
 }
