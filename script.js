@@ -2,6 +2,8 @@
 // CONFIG
 // ===============================
 const API_ENDPOINT = "/api/analyzeCV";
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
 
 // ===============================
 // ELEMENTOS DOM
