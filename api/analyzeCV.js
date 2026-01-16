@@ -78,7 +78,7 @@ CRITERIOS:
 - MUY BUENO: 8–9
 - EXCELENTE: 10
 
-NO agregues texto fuera del JSON.
+NO agregues texto fuera del JSON. DEVOLVER SOLAMENTE EN ESPAÑOL.
 
 CV A ANALIZAR:
 """
