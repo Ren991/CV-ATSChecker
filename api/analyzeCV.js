@@ -26,7 +26,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI.getGenerativeModel({model: "gemini-2.5-flash-native-audio-dialog"});
 
     const prompt = `Eres un reclutador experto IT. Analiza este CV y
 devuelve un JSON válido con esta estructura exacta:
