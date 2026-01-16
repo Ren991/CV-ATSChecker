@@ -28,27 +28,65 @@ module.exports = async function handler(req, res) {
     });
 
     const prompt = `
-Eres un reclutador experto IT.
+Actúa como un analista senior de CVs para procesos de selección IT, con experiencia en ATS, reclutamiento técnico y evaluación de empleabilidad real.
 
-RESPONDE ÚNICAMENTE CON UN JSON VÁLIDO.
-NO agregues texto extra.
-NO markdown.
-NO explicaciones.
+INSTRUCCIONES OBLIGATORIAS:
+- Responde EXCLUSIVAMENTE en ESPAÑOL.
+- Devuelve ÚNICAMENTE un JSON válido.
+- No incluyas texto explicativo fuera del JSON.
+- No traduzcas ni inventes información que no esté explícita en el CV.
+- Analiza solo el contenido presente en el CV proporcionado.
+- No emitas opiniones personales ni suposiciones.
+- No utilices inglés bajo ningún concepto.
 
-Estructura EXACTA:
+OBJETIVO:
+Evaluar la calidad profesional del CV, su claridad, estructura, impacto y compatibilidad con procesos de selección automatizados (ATS), y proponer mejoras concretas basadas únicamente en lo que el CV contiene o no contiene.
+
+ESTRUCTURA DE RESPUESTA (OBLIGATORIA Y EXACTA):
+
 {
-  "score": 0-100,
-  "category": "ELITE|SÓLIDO|MEJORABLE|CRÍTICO",
-  "categoryDesc": "descripción breve",
-  "feedback": [
-    "sugerencia 1",
-    "sugerencia 2",
-    "sugerencia 3"
+  "score": number (0 a 100),
+  "category": "ELITE" | "SÓLIDO" | "MEJORABLE" | "CRÍTICO",
+  "summary": string,
+  "strengths": [
+    string,
+    string
+  ],
+  "improvements": [
+    string,
+    string,
+    string
+  ],
+  "atsObservations": [
+    string,
+    string
   ]
 }
 
-CV:
+REGLAS PARA EL SCORE Y CATEGORÍA (NO VIOLAR):
+- 90 a 100 → "ELITE"
+- 75 a 89 → "SÓLIDO"
+- 55 a 74 → "MEJORABLE"
+- 0 a 54 → "CRÍTICO"
+
+REGLAS DE CONTENIDO:
+- "summary": resumen profesional del CV en 1 o 2 frases, basado SOLO en la información presente.
+- "strengths": aspectos fuertes explícitos del CV (tecnologías, experiencia, claridad, logros).
+- "improvements": mejoras concretas y accionables detectadas a partir de carencias, ambigüedades o falta de información en el CV.
+- "atsObservations": observaciones técnicas sobre keywords, estructura, formato y legibilidad para ATS.
+
+RESTRICCIONES CLAVE:
+- No repitas frases del CV literalmente.
+- No hagas sugerencias genéricas.
+- No inventes experiencia, tecnologías o logros.
+- Si falta información relevante, indícalo como mejora.
+- Cada mejora debe ser clara, específica y aplicable.
+
+CV A ANALIZAR:
+"""
 ${cvText}
+"""
+
 `;
 
     const result = await model.generateContent({
