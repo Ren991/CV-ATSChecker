@@ -2,6 +2,25 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// ===============================
+// UTILIDADES
+// ===============================
+function normalizeCategory(score) {
+  if (score >= 90) return "ELITE";
+  if (score >= 75) return "SÓLIDO";
+  if (score >= 55) return "MEJORABLE";
+  return "CRÍTICO";
+}
+
+function ensureArray(value, minLength = 0) {
+  if (!Array.isArray(value)) return [];
+  if (value.length < minLength) return value;
+  return value;
+}
+
+// ===============================
+// HANDLER
+// ===============================
 module.exports = async function handler(req, res) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -19,7 +38,7 @@ module.exports = async function handler(req, res) {
   try {
     const { cvText } = req.body;
 
-    if (!cvText) {
+    if (!cvText || typeof cvText !== "string") {
       return res.status(400).json({ error: "cvText es requerido" });
     }
 
@@ -45,35 +64,19 @@ Evaluar la calidad profesional del CV, su claridad, estructura, impacto y compat
 ESTRUCTURA DE RESPUESTA (OBLIGATORIA Y EXACTA):
 
 {
-  "score": number (0 a 100),
+  "score": number,
   "category": "ELITE" | "SÓLIDO" | "MEJORABLE" | "CRÍTICO",
   "summary": string,
-  "strengths": [
-    string,
-    string
-  ],
-  "improvements": [
-    string,
-    string,
-    string
-  ],
-  "atsObservations": [
-    string,
-    string
-  ]
+  "strengths": [string, string],
+  "improvements": [string, string, string],
+  "atsObservations": [string, string]
 }
 
-REGLAS PARA EL SCORE Y CATEGORÍA (NO VIOLAR):
+REGLAS PARA EL SCORE Y CATEGORÍA:
 - 90 a 100 → "ELITE"
 - 75 a 89 → "SÓLIDO"
 - 55 a 74 → "MEJORABLE"
 - 0 a 54 → "CRÍTICO"
-
-REGLAS DE CONTENIDO:
-- "summary": resumen profesional del CV en 1 o 2 frases, basado SOLO en la información presente.
-- "strengths": aspectos fuertes explícitos del CV (tecnologías, experiencia, claridad, logros).
-- "improvements": mejoras concretas y accionables detectadas a partir de carencias, ambigüedades o falta de información en el CV.
-- "atsObservations": observaciones técnicas sobre keywords, estructura, formato y legibilidad para ATS.
 
 RESTRICCIONES CLAVE:
 - No repitas frases del CV literalmente.
@@ -86,28 +89,59 @@ CV A ANALIZAR:
 """
 ${cvText}
 """
-
 `;
 
     const result = await model.generateContent({
       contents: [{ parts: [{ text: prompt }] }],
     });
 
-    const responseText = result.response.text().trim();
+    const responseText = result.response.text();
 
-    // 🔒 Parseo seguro
+    // ===============================
+    // PARSEO ULTRA DEFENSIVO
+    // ===============================
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("La IA no devolvió un JSON válido");
+      throw new Error("La IA no devolvió un JSON reconocible");
     }
 
-    const aiResult = JSON.parse(jsonMatch[0]);
+    let aiResult;
+    try {
+      aiResult = JSON.parse(jsonMatch[0]);
+    } catch {
+      throw new Error("JSON inválido generado por la IA");
+    }
 
-    res.status(200).json(aiResult);
+    // ===============================
+    // NORMALIZACIONES
+    // ===============================
+    aiResult.score = Number(aiResult.score);
+
+    if (
+      Number.isNaN(aiResult.score) ||
+      aiResult.score < 0 ||
+      aiResult.score > 100
+    ) {
+      throw new Error("Score inválido generado por la IA");
+    }
+
+    aiResult.category = normalizeCategory(aiResult.score);
+
+    aiResult.summary = typeof aiResult.summary === "string" ? aiResult.summary : "";
+
+    aiResult.strengths = ensureArray(aiResult.strengths, 1);
+    aiResult.improvements = ensureArray(aiResult.improvements, 1);
+    aiResult.atsObservations = ensureArray(aiResult.atsObservations, 1);
+
+    // ===============================
+    // RESPUESTA FINAL
+    // ===============================
+    return res.status(200).json(aiResult);
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({
-      error: error.message || "Error al analizar el CV",
+    console.error("Error analyzeCV:", error.message);
+
+    return res.status(500).json({
+      error: "No se pudo analizar el CV. Intenta nuevamente.",
     });
   }
 };
